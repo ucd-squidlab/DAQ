@@ -12,8 +12,8 @@ def Quit(args):
 
 def Help(args):
     print("\nAll commands are listed below:\n")
-    print("RampUp dac_channel vstart vstop steps duration")
-    print("RampDown dac_channel vstart vstop steps duration")
+    print("setdac dac_channel voltage")
+    print("adc adc_channel")
 
 #bit map:
 #   function    dac_channel     adc_channel     DATA
@@ -26,72 +26,49 @@ def Float2Binary(f):
 #function for converting a two's complement number from the ADC to a usable floating point value
 def Twos2Float(i):
     #resolution for 16 bit mode operation, the ADC resolution can take 2 values, 16 or 24 bit
-    ADCRES16 = 65536.0
+    ADCRES16 = 65535.0
     
     #full scale range, can take 4 different values
     FSR = 20.0
 
     return (FSR * (i - (ADCRES16/2.0)) / ADCRES16) 
 
-#instructs the Arduino to perform a ramp function
-#   args: vstart, vstop, steps, duration 
-def Ramp(args):
-    #function id: 0
+def SetDACChannel(args):
+    #expected arguments: DAC channel(1), channel value(2)
+
+    #function code: 0
     global ser
 
-    #check for correct number of args
-    if len(args) != 6:
-        print("Incorrect number of arguments (" + str(len(args)) + "). Expected 6.")
+    if len(args) != 3: 
+        print("Passed " + str(len(args)) + " arguments. Expected 3.")
         return
 
-    #   bit map (first byte excluded)
-    #   vstart  vstop  steps  duration
-    #     16      16    16      32
 
 
-    #write data to serial, forcing MSB order  
+    #write serial data, forcing MSB first order 
     ser.write(bytearray([0 << 4 | int(args[1]) << 2]))
     ser.write(struct.pack('>H', Float2Binary(args[2])))
-    ser.write(struct.pack('>H', Float2Binary(args[3])))
-    ser.write(struct.pack('>H', int(args[4])))
-    ser.write(struct.pack('>L', int(args[5])))
-    
-    #5 padding bytes to reach 16 bytes 
-    ser.write(5)
+    #write 13 bytes of padding
+    ser.write(13)
 
-    return
+def StartADCConversion(args):
+    #expected arguments: ADC channel(1)
 
-#instructs the Arduino to send its data buffer over serial com
-#   args: null
-def RequestData(args):
-    #funciton id: 1
+    #function code: 1
     global ser
 
-    #write data to serial
-    ser.write(bytearray([1 << 4]))
-    #15 padding bytes to reach 16 bytes 
+    if len(args) != 2:
+        print("Passed " + str(len(args)) + " arguments. Expected 2.")
+        return
+
+    #write serial data, forcing MSB first order 
+    ser.write(bytearray([1 << 4 | int(args[1])]))
+    #write 15 bytes of padding
     ser.write(15)
 
-    #read incoming data
-
-    buffer = ser.read(4096)
-
-    #the contents of the buffer are uint16_t separated into bytes in MSB
-    #iterate over contents and convert to ints
+def BiasMagnent():
+    #need start, stop, number of points, max rate 
     
-    data = []
-
-    for i in range(0, len(buffer), 2):
-        data.append(Twos2Float(buffer[i] << 8 | buffer[i+1]))
-
-    #dump data to text file 
-    f = open("data.txt", "w")
-
-    for i in data:
-        f.write(str(i) + "\n")
-
-    f.close()
-
     return
 
 #input dictionary
@@ -101,11 +78,9 @@ input_dictionary = {
     "Quit" : Quit,
     "quit" : Quit,
     "stop" : Quit,
-    "q" : Quit,
-    "Ramp" : Ramp,
-    "ramp" : Ramp,
-    "GetData" : RequestData,
-    "getdata" : RequestData
+    "q"    : Quit,
+    "setdac" : SetDACChannel,
+    "adc" : StartADCConversion
 }
 
 def main():
@@ -116,6 +91,10 @@ def main():
     ser.open()
 
     while(should_close != True):
+        if ser.in_waiting == 2:
+            buff = ser.read(2)
+            print(Twos2Float(buff[0] << 8 | buff[1]))
+       
         #wait for user input 
         usr_input = input("\nWaiting for commands. Type \"Help\" for a list of commands.\n")
 
