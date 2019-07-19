@@ -13,7 +13,8 @@ def Quit(args):
 def Help(args):
     print("\nAll commands are listed below:\n")
     print("setdac dac_channel voltage")
-    print("adc adc_channel")
+    print("startadc adc_channel")
+    print("getadc adc_channel")
 
 #bit map:
 #   function    dac_channel     adc_channel     DATA
@@ -43,8 +44,6 @@ def SetDACChannel(args):
         print("Passed " + str(len(args)) + " arguments. Expected 3.")
         return
 
-
-
     #write serial data, forcing MSB first order 
     ser.write(bytearray([0 << 4 | int(args[1]) << 2]))
     ser.write(struct.pack('>H', Float2Binary(args[2])))
@@ -66,37 +65,54 @@ def StartADCConversion(args):
     #write 15 bytes of padding
     ser.write(15)
 
-def BiasMagnent():
-    #need start, stop, number of points, max rate 
+def GetADCResults(args):
+    # expected arguments: ADC channel(1)
     
+    # funciton code: 2
+    global ser
+
+    if len(args) != 2:
+        print("Passed " + str(len(args)) + " arguments. Expected 2.")
+        return
+        
+    # write command to get ADC data
+    
+    # write serial data, forcing MSB first order 
+    ser.write(bytearray([2 << 4 | int(args[1])]))
+    # write 15 bytes of padding
+    ser.write(15)
+
+    # assumes all incoming data is ADC data, formats and prints data as floating point numbers to the terminal
+    while ser.in_waiting >= 2:
+        buff = ser.read(2)
+        # data sent from Arduino is MSB first
+        print(Twos2Float(buff[0] << 8 | buff[1]))
+
     return
 
-#input dictionary
+# input dictionary
 input_dictionary = {
-    "Help" : Help,
     "help" : Help,
-    "Quit" : Quit,
-    "quit" : Quit,
-    "stop" : Quit,
     "q"    : Quit,
     "setdac" : SetDACChannel,
-    "adc" : StartADCConversion
+    "startadc" : StartADCConversion,
+    "getadc" : GetADCResults
 }
 
 def main():
-    #setup and open serial port
+    # setup and open serial port
     ser.baudrate = 115200
     ser.port = '/dev/tty.usbmodemfd141'
     ser.timeout = 1
     ser.open()
 
+    # cleanup incoming and outgoing bits
+    ser.flushInput()
+    ser.flushOutput()
+
     while(should_close != True):
-        if ser.in_waiting == 2:
-            buff = ser.read(2)
-            print(Twos2Float(buff[0] << 8 | buff[1]))
-       
         #wait for user input 
-        usr_input = input("\nWaiting for commands. Type \"Help\" for a list of commands.\n")
+        usr_input = input("\nWaiting for commands. Type \"help\" for a list of commands.\n")
 
         #split user input using space delimiters
         split_inputs = usr_input.split()     
