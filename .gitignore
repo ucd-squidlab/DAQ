@@ -45,6 +45,7 @@ nbproject
 .idea
 .project
 .settings
+.mypy*
 
 # Folder #
 ##########
